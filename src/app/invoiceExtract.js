@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
   Button,
@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import { ScreenCapture } from "react-screen-capture";
 import Tesseract from "tesseract.js";
-import { fabric } from "fabric";
+import { processImageText, findWordLocations } from "@/lib/image-processing";
 
 const InvoiceExtract = () => {
   const [extractedText, setExtractedText] = useState("");
@@ -24,6 +24,7 @@ const InvoiceExtract = () => {
   const [open, SetOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [customOptions, setCustomOptions] = useState([
     "companyName",
     "invoiceNumber",
@@ -36,6 +37,19 @@ const InvoiceExtract = () => {
     invoiceDate: "",
   });
   const [selectedDetail, setSelectedDetail] = useState(customOptions[0]); // Track selected value
+  const [words, setWords] = useState([]);
+  const [highlights, setHighlights] = useState([]);
+  const [canvasMode, setCanvasMode] = useState("highlight");
+  const canvasRef = useRef(null);
+  const imageRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.style.pointerEvents = canvasMode === "snip" ? "auto" : "none";
+    }
+  }, [canvasMode]);
 
   const addToInvoiceDetails = () => {
     if (!selectedDetail) {
@@ -53,6 +67,7 @@ const InvoiceExtract = () => {
     }));
     setSelectedDetail("");
     setExtractedText("");
+    SetOpen(false);
   };
 
   // Function to convert image file to Base64
@@ -69,7 +84,14 @@ const InvoiceExtract = () => {
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (file) {
-      setImage(URL.createObjectURL(file)); // Display the uploaded image
+      const url = URL.createObjectURL(file);
+      setImage(url); // Display the uploaded image
+      try {
+        const processedWords = await processImageText(url);
+        setWords(processedWords);
+      } catch (error) {
+        console.error("Error processing image: ", error);
+      }
 
       try {
         const base64Image = await encodeImageToBase64(file);
@@ -94,7 +116,7 @@ const InvoiceExtract = () => {
           });
         } else {
           const parsedDetails = JSON.parse(data.data);
-
+          setDataLoaded(true);
           setInvoiceDetails({
             companyName: parsedDetails.companyName || "N/A",
             invoiceNumber: parsedDetails.invoiceNumber || "N/A",
@@ -116,6 +138,75 @@ const InvoiceExtract = () => {
     setCapturedImage(screenCapture);
     processImage(screenCapture);
   };
+
+  const onHandleHighlight = () => {
+    if (dataLoaded) {
+      const locations = findWordLocations(invoiceDetails, words);
+      setHighlights(locations);
+      drawHighlights(locations);
+    }
+  };
+
+  const drawHighlights = (locations) => {
+    const canvas = canvasRef.current;
+    const image = imageRef.current;
+    const container = containerRef.current;
+    if (!canvas || !image || !container) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Get the actual displayed dimensions of the image
+    const rect = image.getBoundingClientRect();
+    const displayWidth = rect.width;
+    const displayHeight = rect.height;
+
+    // Set canvas size to match displayed image size
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+
+    // Calculate scaling factors
+    const scaleX = displayWidth / image.naturalWidth;
+    const scaleY = displayHeight / image.naturalHeight;
+
+    // Clear previous highlights
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw new highlights with scaling
+    ctx.fillStyle = "rgba(255, 255, 0, 0.3)";
+    locations.forEach((location) => {
+      const { bbox } = location;
+      const scaledX = bbox.x0 * scaleX;
+      const scaledY = bbox.y0 * scaleY;
+      const scaledWidth = (bbox.x1 - bbox.x0) * scaleX;
+      const scaledHeight = (bbox.y1 - bbox.y0) * scaleY;
+      ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
+    });
+  };
+
+  // Update highlights when window is resized
+  useEffect(() => {
+    const handleResize = () => {
+      if (highlights.length > 0) {
+        drawHighlights(highlights);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [highlights]);
+
+  // Update canvas size when image loads
+  useEffect(() => {
+    if (image && imageRef.current) {
+      const imageVal = imageRef.current;
+      imageVal.onload = () => {
+        if (highlights.length > 0) {
+          drawHighlights(highlights);
+        }
+      };
+    }
+  }, [image, highlights]);
 
   const processImage = (capturedImg) => {
     //setLoading(true);
@@ -142,6 +233,11 @@ const InvoiceExtract = () => {
 
   const handleClose = () => {
     SetOpen(false);
+  };
+
+  const handleSnipImage = (onStartCapture) => {
+    setCanvasMode("snip"); // Set canvas to snipping mode
+    onStartCapture(); // Trigger the ScreenCapture start
   };
 
   return (
@@ -236,27 +332,65 @@ const InvoiceExtract = () => {
                 onChange={handleImageUpload}
               />
             </Button>
+            <Button
+              variant="contained"
+              component="label"
+              onClick={onHandleHighlight}
+              disabled={!dataLoaded}
+            >
+              Highlight Text
+            </Button>
             <ScreenCapture onEndCapture={handleScreenCapture}>
               {({ onStartCapture }) => (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={onStartCapture}
-                  disabled={!image}
-                >
-                  Snip Image
-                </Button>
+                <Box display="flex" flexDirection="column" alignItems="center">
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => handleSnipImage(onStartCapture)}
+                    disabled={!image}
+                  >
+                    Snip Image
+                  </Button>
+
+                  {image && (
+                    <Box
+                      ref={containerRef}
+                      position="relative"
+                      width="100%"
+                      height="auto"
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
+                      mt={2}
+                    >
+                      {/* Image Element */}
+                      <img
+                        ref={imageRef}
+                        src={image}
+                        alt="Uploaded Invoice"
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          display: "block",
+                        }}
+                      />
+
+                      {/* Canvas for Highlighting */}
+                      <canvas
+                        ref={canvasRef}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          pointerEvents: "none",
+                        }}
+                      />
+                    </Box>
+                  )}
+                </Box>
               )}
             </ScreenCapture>
           </Box>
-
-          {image && (
-            <img
-              src={image}
-              alt="Uploaded Preview"
-              style={{ maxWidth: "100%", maxHeight: "90%" }}
-            />
-          )}
         </Box>
       </Box>
     </>
