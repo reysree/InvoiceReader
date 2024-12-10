@@ -323,35 +323,41 @@ const InvoiceExtract = () => {
           bgcolor="#f9f9f9"
         >
           <Box display={"flex"} gap={2} alignItems={"center"}>
-            <Button variant="contained" component="label">
-              Upload Image
-              <input
-                type="file"
-                hidden
-                accept="image/*"
-                onChange={handleImageUpload}
-              />
-            </Button>
-            <Button
-              variant="contained"
-              component="label"
-              onClick={onHandleHighlight}
-              disabled={!dataLoaded}
-            >
-              Highlight Text
-            </Button>
             <ScreenCapture onEndCapture={handleScreenCapture}>
               {({ onStartCapture }) => (
                 <Box display="flex" flexDirection="column" alignItems="center">
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={() => handleSnipImage(onStartCapture)}
-                    disabled={!image}
+                  <Box
+                    display="flex"
+                    flexDirection="row"
+                    alignItems="center"
+                    sx={{ gap: "16px" }}
                   >
-                    Snip Image
-                  </Button>
-
+                    <Button variant="contained" component="label">
+                      Upload Image
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                      />
+                    </Button>
+                    <Button
+                      variant="contained"
+                      component="label"
+                      onClick={onHandleHighlight}
+                      disabled={!dataLoaded}
+                    >
+                      Highlight Text
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={() => handleSnipImage(onStartCapture)}
+                      disabled={!image}
+                    >
+                      Snip Image
+                    </Button>
+                  </Box>
                   {image && (
                     <Box
                       ref={containerRef}
