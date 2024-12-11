@@ -13,6 +13,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/material": "^6.1.10",
     "fabric": "^6.5.1",
+    "firebase": "^11.0.2",
     "html2canvas": "^1.4.1",
     "konva": "^9.3.16",
     "lucide-react": "^0.468.0",
@@ -20,6 +21,7 @@
     "openai": "^4.73.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-firebase-hooks": "^5.1.1",
     "react-konva": "^18.2.10",
     "react-screen-capture": "^1.1.1",
     "tesseract.js": "^5.1.1"

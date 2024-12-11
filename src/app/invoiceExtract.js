@@ -16,6 +16,7 @@ import {
 import { ScreenCapture } from "react-screen-capture";
 import Tesseract from "tesseract.js";
 import { processImageText, findWordLocations } from "@/lib/image-processing";
+import { saveInvoiceDetails } from "@/lib/firebase-processing";
 
 const InvoiceExtract = () => {
   const [extractedText, setExtractedText] = useState("");
@@ -29,7 +30,7 @@ const InvoiceExtract = () => {
     "companyName",
     "invoiceNumber",
     "invoiceDate",
-    "Example 1",
+    "Due Date",
   ]);
   const [invoiceDetails, setInvoiceDetails] = useState({
     companyName: "",
@@ -84,6 +85,26 @@ const InvoiceExtract = () => {
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (file) {
+      // Reset related states for the new upload
+      setInvoiceDetails({
+        companyName: "",
+        invoiceNumber: "",
+        invoiceDate: "",
+      });
+      setWords([]);
+      setHighlights([]);
+      setDataLoaded(false);
+      setExtractedText("");
+      setProgress(0);
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear all drawings
+        }
+      }
+
       const url = URL.createObjectURL(file);
       setImage(url); // Display the uploaded image
       try {
@@ -102,7 +123,7 @@ const InvoiceExtract = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ base64Image }),
+          body: JSON.stringify({ base64Image, invoiceDetails }),
         });
 
         const data = await response.json();
@@ -116,12 +137,15 @@ const InvoiceExtract = () => {
           });
         } else {
           const parsedDetails = JSON.parse(data.data);
+          console.log("The updated details are : ", parsedDetails);
           setDataLoaded(true);
-          setInvoiceDetails({
-            companyName: parsedDetails.companyName || "N/A",
-            invoiceNumber: parsedDetails.invoiceNumber || "N/A",
-            invoiceDate: parsedDetails.invoiceDate || "N/A",
-          });
+          setInvoiceDetails((prevDetails) => ({
+            ...prevDetails, // Keep any existing fields
+            ...Object.keys(parsedDetails).reduce((acc, key) => {
+              acc[key] = parsedDetails[key] || "N/A"; // Use parsed value or "N/A" if not present
+              return acc;
+            }, {}),
+          }));
         }
       } catch (error) {
         console.error("Error processing invoice:", error);
@@ -240,6 +264,10 @@ const InvoiceExtract = () => {
     onStartCapture(); // Trigger the ScreenCapture start
   };
 
+  const handleSaveInvoice = () => {
+    saveInvoiceDetails(invoiceDetails);
+  };
+
   return (
     <>
       {/* Dialog for Extracted Text */}
@@ -310,6 +338,13 @@ const InvoiceExtract = () => {
               <b>{key.charAt(0).toUpperCase() + key.slice(1)}:</b> {value || ""}
             </Typography>
           ))}
+          <Button
+            variant="contained"
+            onClick={handleSaveInvoice}
+            disabled={!dataLoaded}
+          >
+            Add to Database
+          </Button>
         </Box>
 
         {/* Right Box: Image Upload */}
